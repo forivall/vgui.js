@@ -23,7 +23,7 @@ module.exports = (grunt) ->
         tasks: 'coffee'
       coffeeredux:
         files: 'src/*.coffee'
-        tasks: 'coffee'
+        tasks: 'coffeeredux'
 
   grunt.loadNpmTasks 'grunt-contrib-coffee'
   grunt.loadNpmTasks 'grunt-coffee-redux'

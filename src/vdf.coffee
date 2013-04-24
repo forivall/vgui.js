@@ -1,54 +1,101 @@
+
 # vdf.coffee
 # serialization/deserialization of VDF files
 
-# at this point, it's basically a ripoff of steamodd's vdf.py
+# heavily based on steamodd's vdf.py
 
 # tokens. luckily, they're just single characters,
 # so regexes aren't needed
 STRING = '"'
 NODE_OPEN = '{'
 NODE_CLOSE = '}'
+BR_OPEN = '['
+BR_CLOSE = ']'
 COMMENT = '/'
 CR = '\r'
 LF = '\n'
+SPACE = ' '
+TAB = '\t'
+WS_RE = /[ \t\r\n]/g
+
+# logdebug = (rest...) -> console.log(rest...)
+logdebug = ->
+
+@reIndexOf = reIndexOf = (re, searchElement, fromIndex) ->
+  # gotcha: the re MUST be global (/g)
+  re.lastIndex = if fromIndex? then fromIndex else 0
+  result = re.exec(searchElement)
+  return if result? then result.index else -1
 
 # todo: use a streams api
-_parse = (data, i) ->
+@_parse = _parse = (data, i) ->
   # todo: if completely held in memory, use a grammer
   # definition or base on JSON3
 
+  i = i or 0
   laststr = null
   lasttok = null
+  lastkey = null
+  lastval = null
   result = {}
-  i = i or 0
+
+  annt = annotations = {}
+
   while i < data.length
     c = data[i]
 
-    if c == STRING
-      [string, i] = _symtostr(data, i)
-      if lasttok == STRING
-        result[laststr] = string
-      laststr = string
-    else if c == NODE_OPEN
-      [result[laststr], i] = _parse(data, i + 1)
+    if c == NODE_OPEN
+      logdebug 'open   ', i, c
+      [result[laststr], i, annt] = _parse(data, i + 1)
+      if lastbrk?
+        # TODO: figure out a more canonical way to decide
+        #       bracketed output
+        result[laststr + lastbrk] = result[laststr]
     else if c == NODE_CLOSE
-      return [result, i]
+      logdebug 'close  ', i, c
+      return [result, i, annt]
+    else if c == BR_OPEN
+      logdebug 'br_open', i, c
+      [lastbrk, i] = _brktostr(data, i)
+      if lastkey?
+        result[lastkey + lastbrk] = lastval
+        lastkey = lastval = null
     else if c == COMMENT
+      logdebug 'comment', i, c
       if (i + 1) < data.length and data[i + 1] == '/'
+        startcomment = i
         i = data.indexOf('\n', i)
+        annt[laststr] = data.substring(startcomment, i)
     else if c == CR or c == LF
+      logdebug 'newline', i, c
       ni = i + 1
       if ni < data.length and data[ni] == LF
         i = ni
       if lasttok != LF
         c = LF
+    else if c != SPACE and c != TAB
+      if c == STRING
+        logdebug 'string ', i, c
+        [string, i] = _symtostr(data, i)
+      else
+        logdebug 'string2', i, c
+        [string, i] = _rawsymtostr(data, i)
+        c = STRING
+
+      if lasttok == STRING
+        if laststr not of result
+          result[laststr] = string
+        lastkey = laststr
+        lastval = string
+      laststr = string
     else
       c = lasttok
 
     lasttok = c
     i += 1
 
-  return [result, i]
+  # return [result, i, annt]
+  return [result, i, {}]
 
 @parse = parse = (data) -> _parse(data)[0]
 
@@ -66,13 +113,20 @@ _symtostr = (line, i) ->
   finalstr = line.substring(opening, closing)
   return [finalstr, i + finalstr.length + 1]
 
-if require
-  # running in node -- todo: better testing
-  'const'; fs = require 'fs'
-  # 'const'; process = require 'process'
+_rawsymtostr = (line, i) ->
+  opening = i
+  # closing = 0
 
-  if process.argv[0] == 'node'
-    process.argv.shift()
-  data = fs.readFileSync process.argv[1]
+  closing = reIndexOf(WS_RE, line, opening)
+  # console.log(opening, closing, line[closing])
 
-  console.log parse data.toString()
+  finalstr = line.substring(opening, closing)
+  return [finalstr, i + finalstr.length - 1]
+
+_brktostr = (line, i) ->
+  opening = i + 1
+
+  closing = line.indexOf(BR_CLOSE, opening)
+
+  finalstr = line.substring(opening, closing)
+  return [finalstr, i + finalstr.length + 1]
