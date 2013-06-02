@@ -28,11 +28,15 @@ logdebug = ->
   return if result? then result.index else -1
 
 # todo: use a streams api
-@_parse = _parse = (data, i) ->
+@_parse = _parse = (data, options={}) ->
   # todo: if completely held in memory, use a grammer
   # definition or base on JSON3
 
-  i = i or 0
+  if options.default_namespace is undefined
+    # make sure that it doesn't match undefined
+    options.default_namespace = {}
+
+  i = if options.i? then options.i else 0
   laststr = null
   lasttok = null
   lastkey = null
@@ -46,11 +50,15 @@ logdebug = ->
 
     if c == NODE_OPEN
       logdebug 'open   ', i, c
-      [result[laststr], i, annt] = _parse(data, i + 1)
+      options.i = i + 1
+      [result[laststr], i, annt] = _parse(data, options)
       if lastbrk?
         # TODO: figure out a more canonical way to decide
         #       bracketed output
-        result[laststr + lastbrk] = result[laststr]
+        if options.keep_namespaces
+          result[laststr + lastbrk] = result[laststr]
+        if options.default_namespace is lastbrk
+          result[lastbrk] = result[laststr]
     else if c == NODE_CLOSE
       logdebug 'close  ', i, c
       return [result, i, annt]
@@ -58,7 +66,11 @@ logdebug = ->
       logdebug 'br_open', i, c
       [lastbrk, i] = _brktostr(data, i)
       if lastkey?
-        result[lastkey + lastbrk] = lastval
+        if options.keep_namespaces
+          result[lastkey + lastbrk] = lastval
+        if options.default_namespace is lastbrk
+          result[lastkey] = lastval
+
         lastkey = lastval = null
     else if c == COMMENT
       logdebug 'comment', i, c
@@ -97,7 +109,7 @@ logdebug = ->
   # return [result, i, annt]
   return [result, i, {}]
 
-@parse = parse = (data) -> _parse(data)[0]
+@parse = parse = (data, options) -> _parse(data, options)[0]
 
 _symtostr = (line, i) ->
   opening = i + 1
