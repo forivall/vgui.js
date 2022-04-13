@@ -2,7 +2,7 @@
   "name": "vgui.js",
   "version": "0.0.1",
   "devDependencies": {
-    "grunt": "~0.4.1",
+    "grunt": "~1.5.2",
     "grunt-contrib-coffee": "~0.7.0",
     "grunt-contrib-watch": "~0.3.1",
     "grunt-coffee-redux": "~0.2.3"
